@@ -33,6 +33,20 @@ jobs:
       - name: Install dependencies using lockfile
         run: npm ci
 
+      - name: Audit production npm dependencies (fail on CRITICAL)
+        run: npm audit --omit=dev --audit-level=critical
+
+      - name: Validate GitHub Actions workflow YAML files
+        run: |
+          python3 - <<'EOF'
+          import glob, yaml
+          for path in sorted(glob.glob('.github/workflows/*.yml')):
+              with open(path, 'r', encoding='utf-8') as f:
+                  data = yaml.safe_load(f)
+              assert isinstance(data, dict) and 'jobs' in data, f"Invalid workflow: {path}"
+              print(f"Valid workflow YAML: {path}")
+          EOF
+
       - name: Run ESLint
         run: npm run lint
 

@@ -1,0 +1,85 @@
+name: Rollback Frontend Container App Revision (OIDC)
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target GitHub Environment
+        required: true
+        default: azure-dev
+        type: choice
+        options:
+          - azure-dev
+      target_revision:
+        description: Optional exact revision name (leave blank to auto-select previous healthy revision)
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  rollback-web:
+    name: Rollback ca-nexamind-web to Previous Healthy Revision
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment || 'azure-dev' }}
+    timeout-minutes: 15
+
+    steps:
+      - name: Authenticate to Azure via Microsoft Entra OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Resolve target revision and shift 100% traffic
+        run: |
+          RG="${{ vars.AZURE_RESOURCE_GROUP }}"
+          APP="ca-nexamind-web"
+          TARGET="${{ inputs.target_revision }}"
+
+          if [ -z "${TARGET}" ]; then
+            TARGET=$(az containerapp revision list \
+              --resource-group "${RG}" \
+              --name "${APP}" \
+              --all \
+              --query "sort_by([?properties.healthState=='Healthy' || properties.runningState=='Running'], &properties.createdTime)[-2].name" \
+              -o tsv)
+          fi
+
+          if [ -z "${TARGET}" ]; then
+            echo "::error::No previous healthy revision found for ${APP}."
+            exit 1
+          fi
+
+          echo "Activating and routing 100% traffic to revision: ${TARGET}"
+          az containerapp revision activate \
+            --resource-group "${RG}" \
+            --name "${APP}" \
+            --revision "${TARGET}" || true
+
+          az containerapp ingress traffic set \
+            --resource-group "${RG}" \
+            --name "${APP}" \
+            --revision-weight "${TARGET}=100"
+
+      - name: Verify Frontend Health After Rollback
+        run: |
+          WEB_FQDN=$(az containerapp show \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --name ca-nexamind-web \
+            --query "properties.configuration.ingress.fqdn" -o tsv)
+
+          for i in $(seq 1 10); do
+            if curl -fsS "https://${WEB_FQDN}/healthz"; then
+              echo ""
+              echo "Frontend rollback verified healthy on https://${WEB_FQDN}"
+              exit 0
+            fi
+            sleep 6
+          done
+          echo "::error::Post-rollback frontend health check failed."
+          exit 1
