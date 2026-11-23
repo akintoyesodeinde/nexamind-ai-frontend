@@ -1,10 +1,10 @@
-name: Deploy Frontend to Azure Container Apps (OIDC)
+name: Deploy Frontend to Azure VM (Docker Hub + Entra OIDC)
 
 on:
   workflow_dispatch:
     inputs:
       environment:
-        description: Target GitHub Environment
+        description: Protected GitHub Deployment Environment
         required: true
         default: azure-dev
         type: choice
@@ -19,12 +19,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: frontend-deploy-${{ inputs.environment || 'azure-dev' }}
+  group: nexamind-frontend-deploy-${{ inputs.environment || 'azure-dev' }}
   cancel-in-progress: false
 
 jobs:
-  build-scan-and-deploy:
-    name: Build, Scan & Deploy React/Nginx SPA
+  build-scan-push-and-deploy:
+    name: Build, Scan, Push to Docker Hub & Deploy SPA via Entra OIDC VM Run Command
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment || 'azure-dev' }}
     timeout-minutes: 20
@@ -39,12 +39,32 @@ jobs:
           SHORT_SHA="${GITHUB_SHA::7}"
           echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
           echo "image_tag=sha-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
-          echo "rev_suffix=rev-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            echo "release_tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          else
+            echo "release_tag=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Validate required non-secret deployment variables
+        run: |
+          for v in DOCKERHUB_USERNAME AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID AZURE_RESOURCE_GROUP AZURE_VM_NAME; do
+            if [ -z "${!v}" ]; then
+              echo "::error::Missing required GitHub Environment Variable: ${v}"
+              exit 1
+            fi
+          done
+        env:
+          DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+          AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          AZURE_VM_NAME: ${{ vars.AZURE_VM_NAME }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
-      - name: Build production Nginx SPA image
+      - name: Build production non-root Nginx SPA image
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -53,11 +73,11 @@ jobs:
           load: true
           build-args: |
             VITE_API_BASE_URL=${{ vars.VITE_API_BASE_URL || '/api/v1' }}
-          tags: nexamind-ai-frontend:${{ steps.meta.outputs.image_tag }}
+          tags: ${{ vars.DOCKERHUB_USERNAME }}/nexamind-ai-frontend:${{ steps.meta.outputs.image_tag }}
 
       - name: Local SPA Container Smoke Test
         run: |
-          docker run -d --name nexamind-fe-release -p 8080:8080 "nexamind-ai-frontend:${{ steps.meta.outputs.image_tag }}"
+          docker run -d --name nexamind-fe-release -p 8080:8080 "${{ vars.DOCKERHUB_USERNAME }}/nexamind-ai-frontend:${{ steps.meta.outputs.image_tag }}"
           sleep 2
           curl -fsS http://127.0.0.1:8080/healthz
           curl -fsS http://127.0.0.1:8080/ | grep -q "NexaMind AI"
@@ -66,47 +86,87 @@ jobs:
       - name: Scan production image with Trivy (fail on fixable CRITICAL)
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: nexamind-ai-frontend:${{ steps.meta.outputs.image_tag }}
+          image-ref: ${{ vars.DOCKERHUB_USERNAME }}/nexamind-ai-frontend:${{ steps.meta.outputs.image_tag }}
           format: table
           exit-code: "1"
           ignore-unfixed: true
           vuln-type: os,library
           severity: CRITICAL
 
-      - name: Authenticate to Azure via Microsoft Entra OIDC (Zero Secrets)
+      - name: Authenticate to Docker Hub (Scoped Access Token — Never Account Password)
+        uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Push immutable versioned SPA image to Docker Hub
+        run: |
+          IMAGE="${{ vars.DOCKERHUB_USERNAME }}/nexamind-ai-frontend"
+          TAG="${{ steps.meta.outputs.image_tag }}"
+          docker push "${IMAGE}:${TAG}"
+          if [ -n "${{ steps.meta.outputs.release_tag }}" ]; then
+            docker tag "${IMAGE}:${TAG}" "${IMAGE}:${{ steps.meta.outputs.release_tag }}"
+            docker push "${IMAGE}:${{ steps.meta.outputs.release_tag }}"
+          fi
+
+      - name: Authenticate to Azure via Microsoft Entra OIDC (Zero Client Secrets)
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Push immutable SPA image to ACR and deploy Container App revision
+      - name: Deploy Frontend SPA & Reverse Proxy on Azure VM via VM Run Command
+        env:
+          DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+          IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
         run: |
-          ACR_NAME="${{ vars.AZURE_ACR_NAME }}"
-          ACR_SERVER="${ACR_NAME}.azurecr.io"
-          az acr login --name "${ACR_NAME}"
-          docker tag "nexamind-ai-frontend:${{ steps.meta.outputs.image_tag }}" "${ACR_SERVER}/nexamind-ai-frontend:${{ steps.meta.outputs.image_tag }}"
-          docker push "${ACR_SERVER}/nexamind-ai-frontend:${{ steps.meta.outputs.image_tag }}"
+          cat <<'SCRIPT' > /tmp/deploy-frontend.sh
+          #!/usr/bin/env bash
+          set -euo pipefail
+          DOCKERHUB_USER="$1"
+          NEW_TAG="$2"
 
-          az containerapp update \
-            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
-            --name ca-nexamind-web \
-            --image "${ACR_SERVER}/nexamind-ai-frontend:${{ steps.meta.outputs.image_tag }}" \
-            --revision-suffix "${{ steps.meta.outputs.rev_suffix }}"
+          mkdir -p /opt/nexamind/releases
+          touch /opt/nexamind/.env.deploy
+          chmod 640 /opt/nexamind/.env.deploy
 
-      - name: Post-Deploy Live SPA Smoke Test
-        run: |
-          WEB_FQDN=$(az containerapp show \
-            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
-            --name ca-nexamind-web \
-            --query "properties.configuration.ingress.fqdn" -o tsv)
+          PREV_TAG=$(grep '^FRONTEND_IMAGE_TAG=' /opt/nexamind/.env.deploy | cut -d= -f2 || true)
+          if [ -n "${PREV_TAG}" ] && [ "${PREV_TAG}" != "${NEW_TAG}" ]; then
+            echo "${PREV_TAG}" > /opt/nexamind/releases/frontend.previous
+          fi
 
+          grep -q '^DOCKERHUB_USERNAME=' /opt/nexamind/.env.deploy \
+            && sed -i "s|^DOCKERHUB_USERNAME=.*|DOCKERHUB_USERNAME=${DOCKERHUB_USER}|" /opt/nexamind/.env.deploy \
+            || echo "DOCKERHUB_USERNAME=${DOCKERHUB_USER}" >> /opt/nexamind/.env.deploy
+
+          grep -q '^FRONTEND_IMAGE_TAG=' /opt/nexamind/.env.deploy \
+            && sed -i "s|^FRONTEND_IMAGE_TAG=.*|FRONTEND_IMAGE_TAG=${NEW_TAG}|" /opt/nexamind/.env.deploy \
+            || echo "FRONTEND_IMAGE_TAG=${NEW_TAG}" >> /opt/nexamind/.env.deploy
+
+          docker compose --env-file /opt/nexamind/.env.deploy -f /opt/nexamind/compose.prod.yaml pull frontend proxy
+          docker compose --env-file /opt/nexamind/.env.deploy -f /opt/nexamind/compose.prod.yaml up -d frontend proxy
+
+          # Verify BOTH Frontend SPA and Frontend-to-Backend reverse proxy connectivity over HTTPS
           for i in $(seq 1 10); do
-            if curl -fsS "https://${WEB_FQDN}/healthz" && curl -fsS "https://${WEB_FQDN}/" | grep -q "NexaMind AI"; then
-              echo "Frontend SPA verified live at https://${WEB_FQDN}"
+            if curl -kfsS https://127.0.0.1/ | grep -q "NexaMind AI" \
+              && curl -kfsS https://127.0.0.1/api/v1/health/live > /dev/null; then
+              echo "${NEW_TAG}" > /opt/nexamind/releases/frontend.current
+              echo "FRONTEND_DEPLOY_VERIFIED=${NEW_TAG}"
               exit 0
             fi
-            sleep 6
+            sleep 5
           done
-          echo "::error::Frontend post-deploy smoke test failed."
+          echo "ERROR: Frontend SPA or backend proxy connectivity check failed."
           exit 1
+          SCRIPT
+
+          az vm run-command invoke \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --name "${{ vars.AZURE_VM_NAME }}" \
+            --command-id RunShellScript \
+            --scripts @/tmp/deploy-frontend.sh \
+            --parameters "${DOCKERHUB_USERNAME}" "${IMAGE_TAG}" \
+            --query "value[0].message" -o tsv | tee /tmp/vm-fe-deploy.log
+
+          grep -q "FRONTEND_DEPLOY_VERIFIED=${IMAGE_TAG}" /tmp/vm-fe-deploy.log
