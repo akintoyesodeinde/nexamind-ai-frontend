@@ -198,6 +198,7 @@ describe('Phase 3 Frontend — AI Chat SSE Streaming, Verified Citations & Histo
       messages: [
         {
           id: 'msg-u-1',
+          conversation_id: 'conv-1',
           role: 'user',
           content: 'Summarize loan policies',
           model_alias: 'default-chat',
@@ -207,11 +208,13 @@ describe('Phase 3 Frontend — AI Chat SSE Streaming, Verified Citations & Histo
           cost_usd: '0.000000',
           latency_ms: 0,
           feedback: null,
+          feedback_note: null,
           citations: [],
           created_at: '2026-11-23T00:00:00.000Z',
         },
         {
           id: 'msg-a-1',
+          conversation_id: 'conv-1',
           role: 'assistant',
           content: 'Loans above $250,000 require Credit Committee approval [1].',
           model_alias: 'default-chat',
@@ -221,6 +224,7 @@ describe('Phase 3 Frontend — AI Chat SSE Streaming, Verified Citations & Histo
           cost_usd: '0.000090',
           latency_ms: 42,
           feedback: null,
+          feedback_note: null,
           citations: [completedCitation],
           created_at: '2026-11-23T00:00:01.000Z',
         },
