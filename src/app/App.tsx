@@ -5,19 +5,25 @@ import { AuthProvider, useAuth } from '@/app/AuthContext';
 import { AppShell } from '@/components/layout/AppShell';
 import { ErrorBoundary } from '@/components/layout/ErrorBoundary';
 import { Skeleton } from '@/components/ui/feedback';
+import { AgentRunsPage } from '@/features/agents/AgentRunsPage';
+import { AgentsStudioPage } from '@/features/agents/AgentsStudioPage';
+import { UsageAnalyticsPage } from '@/features/analytics/UsageAnalyticsPage';
+import { ApprovalInboxPage } from '@/features/approvals/ApprovalInboxPage';
+import { SecurityAuditPage } from '@/features/audit/SecurityAuditPage';
 import { LoginPage } from '@/features/auth/LoginPage';
 import { OnboardingPage } from '@/features/auth/OnboardingPage';
 import { RegisterPage } from '@/features/auth/RegisterPage';
-import { PhasePlaceholderPage } from '@/features/common/PhasePlaceholderPage';
 import { ChatWorkspacePage } from '@/features/chat/ChatWorkspacePage';
 import { ConversationsPage } from '@/features/chat/ConversationsPage';
 import { DashboardPage } from '@/features/dashboard/DashboardPage';
 import { DocumentIntelligencePage } from '@/features/documents/DocumentIntelligencePage';
 import { DocumentsPage } from '@/features/documents/DocumentsPage';
+import { EvaluationsPage } from '@/features/evaluations/EvaluationsPage';
 import { KnowledgeBasesPage } from '@/features/knowledge/KnowledgeBasesPage';
 import { ProfilePage } from '@/features/settings/ProfilePage';
 import { TenantSettingsPage } from '@/features/settings/TenantSettingsPage';
 import { UserRolesAdminPage } from '@/features/settings/UserRolesAdminPage';
+import { WorkflowsPage } from '@/features/workflows/WorkflowsPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -94,76 +100,13 @@ export function AppRoutes() {
         <Route path="/conversations" element={<ConversationsPage />} />
 
         {/* Phase 4 screens */}
-        <Route
-          path="/agents"
-          element={
-            <PhasePlaceholderPage
-              title="AI Agent Studio"
-              phase="Phase 4"
-              description="Configure allowlisted tool-calling agents with JSON Schema validation and human approval policies."
-            />
-          }
-        />
-        <Route
-          path="/agents/runs"
-          element={
-            <PhasePlaceholderPage
-              title="Agent Execution History"
-              phase="Phase 4"
-              description="Inspect step-by-step stateful agent runs, tool inputs/outputs, and audit traces."
-            />
-          }
-        />
-        <Route
-          path="/workflows"
-          element={
-            <PhasePlaceholderPage
-              title="Workflow Management"
-              phase="Phase 4"
-              description="Define and launch multi-step automated workflows including compliance reporting."
-            />
-          }
-        />
-        <Route
-          path="/approvals"
-          element={
-            <PhasePlaceholderPage
-              title="Approval Inbox"
-              phase="Phase 4"
-              description="Review, approve, or reject AI-proposed actions with idempotent execution guarantees."
-            />
-          }
-        />
-        <Route
-          path="/analytics/usage"
-          element={
-            <PhasePlaceholderPage
-              title="AI Usage & Cost Analytics"
-              phase="Phase 4"
-              description="Track token consumption, latency, model usage, and DECIMAL(18,6) cost ceilings."
-            />
-          }
-        />
-        <Route
-          path="/evaluations"
-          element={
-            <PhasePlaceholderPage
-              title="AI Evaluation Dashboard"
-              phase="Phase 4"
-              description="Benchmark citation accuracy (>=95% target), groundedness, and safe abstention."
-            />
-          }
-        />
-        <Route
-          path="/security/audit"
-          element={
-            <PhasePlaceholderPage
-              title="Security Audit Dashboard"
-              phase="Phase 4"
-              description="Search tamper-evident hash-chained audit logs and security events."
-            />
-          }
-        />
+        <Route path="/agents" element={<AgentsStudioPage />} />
+        <Route path="/agents/runs" element={<AgentRunsPage />} />
+        <Route path="/workflows" element={<WorkflowsPage />} />
+        <Route path="/approvals" element={<ApprovalInboxPage />} />
+        <Route path="/analytics/usage" element={<UsageAnalyticsPage />} />
+        <Route path="/evaluations" element={<EvaluationsPage />} />
+        <Route path="/security/audit" element={<SecurityAuditPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

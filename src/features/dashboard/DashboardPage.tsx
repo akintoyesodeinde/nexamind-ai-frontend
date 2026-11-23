@@ -1,14 +1,19 @@
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
+  BarChart3,
+  Bot,
   CheckSquare,
   Database,
   FileText,
+  GitBranch,
   Settings,
   ShieldCheck,
+  Sparkles,
   Users,
 } from 'lucide-react';
 import { useAuth } from '@/app/AuthContext';
+import { analyticsService } from '@/services/phase4';
 import { tenantService } from '@/services/platform';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -29,6 +34,12 @@ export function DashboardPage() {
     queryKey: ['audit-logs', activeTenantId, 1],
     queryFn: () => tenantService.listAuditLogs(1),
     enabled: Boolean(activeTenantId) && hasPermission('audit.view'),
+  });
+
+  const analyticsQuery = useQuery({
+    queryKey: ['analytics', 'overview', activeTenantId, 30],
+    queryFn: () => analyticsService.overview(30),
+    enabled: Boolean(activeTenantId) && hasPermission('analytics.view'),
   });
 
   if (tenantQuery.isLoading) {
@@ -53,12 +64,37 @@ export function DashboardPage() {
   }
 
   const { tenant, settings, stats, current_role } = tenantQuery.data;
+  const analytics = analyticsQuery.data;
 
   const kpis = [
-    { label: 'Active Members', value: stats.members_count, icon: Users, sub: `Your role: ${current_role}` },
-    { label: 'Knowledge Bases', value: stats.knowledge_bases_count, icon: Database, sub: 'Phase 2 ingestion ready' },
-    { label: 'Indexed Documents', value: stats.documents_count, icon: FileText, sub: `Max upload ${settings.max_upload_mb} MB` },
-    { label: 'Pending Approvals', value: stats.pending_approvals_count, icon: CheckSquare, sub: 'Human-in-the-loop gate' },
+    {
+      label: 'Active Members',
+      value: stats.members_count,
+      icon: Users,
+      sub: `Your role: ${current_role}`,
+      to: '/admin/users',
+    },
+    {
+      label: 'Knowledge Bases',
+      value: stats.knowledge_bases_count,
+      icon: Database,
+      sub: `${stats.documents_count} indexed documents`,
+      to: '/knowledge-bases',
+    },
+    {
+      label: 'Indexed Documents',
+      value: stats.documents_count,
+      icon: FileText,
+      sub: `Max upload ${settings.max_upload_mb} MB`,
+      to: '/documents',
+    },
+    {
+      label: 'Pending Approvals',
+      value: stats.pending_approvals_count,
+      icon: CheckSquare,
+      sub: 'Human-in-the-loop gate',
+      to: '/approvals',
+    },
   ];
 
   return (
@@ -67,10 +103,19 @@ export function DashboardPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">{tenant.name} Overview</h1>
           <p className="text-sm text-muted-foreground">
-            Multi-tenant governance, AI budget guardrails, and recent security activity.
+            Multi-tenant AI knowledge, governed agents, approval workflows, and security telemetry.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button asChild variant="outline" size="sm">
+            <Link to="/chat">AI Chat</Link>
+          </Button>
+          <Button asChild variant="outline" size="sm">
+            <Link to="/workflows">
+              <GitBranch className="h-4 w-4" />
+              Workflows
+            </Link>
+          </Button>
           {hasPermission('users.manage') && (
             <Button asChild variant="outline" size="sm">
               <Link to="/admin/users">Manage Members</Link>
@@ -87,7 +132,7 @@ export function DashboardPage() {
         </div>
       </div>
 
-      {/* KPI Cards */}
+      {/* Primary KPI Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {kpis.map((kpi) => {
           const Icon = kpi.icon;
@@ -105,6 +150,73 @@ export function DashboardPage() {
           );
         })}
       </div>
+
+      {/* Phase 4 Live AI & Automation Analytics Strip */}
+      {analytics && (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardDescription className="font-medium">30d AI Requests</CardDescription>
+              <BarChart3 className="h-4 w-4 text-primary" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{analytics.ai_usage.total_requests}</div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Avg {analytics.ai_usage.avg_latency_ms} ms · ${analytics.ai_usage.total_cost_usd} USD
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardDescription className="font-medium">Agent &amp; Workflow Runs</CardDescription>
+              <Bot className="h-4 w-4 text-primary" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {analytics.automation.agent_runs_total} / {analytics.automation.workflow_runs_total}
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {analytics.automation.workflows_completed} completed ·{' '}
+                {analytics.automation.approvals_approved} approved
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardDescription className="font-medium">Monthly Budget Used</CardDescription>
+              <ShieldCheck className="h-4 w-4 text-emerald-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{analytics.budget.token_utilization_pct}%</div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {analytics.budget.monthly_tokens_used.toLocaleString()} /{' '}
+                {analytics.budget.monthly_token_budget.toLocaleString()} tokens
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardDescription className="font-medium">Eval Citation Accuracy</CardDescription>
+              <Sparkles className="h-4 w-4 text-primary" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {analytics.evaluation.citation_correctness_pct !== null
+                  ? `${analytics.evaluation.citation_correctness_pct}%`
+                  : 'Not run'}
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {analytics.evaluation.groundedness_score_pct !== null
+                  ? `Groundedness ${analytics.evaluation.groundedness_score_pct}%`
+                  : 'Run benchmark in AI Evaluations'}
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Governance Summary + Recent Audit */}
       <div className="grid gap-6 lg:grid-cols-2">
@@ -141,11 +253,18 @@ export function DashboardPage() {
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Recent Audit Trail</CardTitle>
-            <CardDescription>
-              Tamper-evident SHA-256 hash-chained activity ({stats.audit_events_last_24h} events in 24h)
-            </CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="text-base">Recent Audit Trail</CardTitle>
+              <CardDescription>
+                Tamper-evident SHA-256 hash-chained activity ({stats.audit_events_last_24h} events in 24h)
+              </CardDescription>
+            </div>
+            {hasPermission('audit.view') && (
+              <Button asChild variant="outline" size="sm">
+                <Link to="/security/audit">Open Audit</Link>
+              </Button>
+            )}
           </CardHeader>
           <CardContent>
             {!hasPermission('audit.view') ? (

@@ -55,17 +55,17 @@ const navGroups: { title: string; items: NavItem[] }[] = [
   {
     title: 'Automation',
     items: [
-      { label: 'AI Agent Studio', to: '/agents', icon: Bot, phaseBadge: 'P4' },
-      { label: 'Agent Runs', to: '/agents/runs', icon: Activity, phaseBadge: 'P4' },
-      { label: 'Workflows', to: '/workflows', icon: GitBranch, phaseBadge: 'P4' },
-      { label: 'Approval Inbox', to: '/approvals', icon: CheckSquare, phaseBadge: 'P4' },
+      { label: 'AI Agent Studio', to: '/agents', icon: Bot },
+      { label: 'Agent Runs', to: '/agents/runs', icon: Activity },
+      { label: 'Workflows', to: '/workflows', icon: GitBranch },
+      { label: 'Approval Inbox', to: '/approvals', icon: CheckSquare, permission: 'approvals.act' },
     ],
   },
   {
     title: 'Governance & Admin',
     items: [
-      { label: 'Usage & Cost', to: '/analytics/usage', icon: BarChart3, phaseBadge: 'P4' },
-      { label: 'AI Evaluations', to: '/evaluations', icon: Sparkles, phaseBadge: 'P4' },
+      { label: 'Usage & Cost', to: '/analytics/usage', icon: BarChart3, permission: 'analytics.view' },
+      { label: 'AI Evaluations', to: '/evaluations', icon: Sparkles, permission: 'analytics.view' },
       {
         label: 'Users & Roles',
         to: '/admin/users',
@@ -83,7 +83,6 @@ const navGroups: { title: string; items: NavItem[] }[] = [
         to: '/security/audit',
         icon: ShieldCheck,
         permission: 'audit.view',
-        phaseBadge: 'P4',
       },
       { label: 'Profile', to: '/settings/profile', icon: UserCircle },
     ],
