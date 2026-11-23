@@ -41,5 +41,5 @@ npm audit --omit=dev --audit-level=critical
 ```
 
 ## CI/CD & Azure Linux VM Deployment
-- **CI (`.github/workflows/ci.yml`):** `npm ci`, production `npm audit --omit=dev --audit-level=critical`, workflow YAML validation, ESLint, strict TypeScript, 11/11 Vitest tests, Vite production bundle, non-root `nginx:1.31.10-alpine` SPA Docker build, live `/healthz` smoke test, and Trivy CRITICAL scan.
+- **CI (`.github/workflows/ci.yml`):** `npm ci`, production `npm audit --omit=dev --audit-level=critical`, workflow YAML validation, ESLint, strict TypeScript, 11/11 Vitest tests, Vite production bundle, non-root `nginx:1.30.7-alpine` SPA Docker build, live `/healthz` smoke test, and Trivy CRITICAL scan.
 - **CD & Rollback (`.github/workflows/deploy.yml`, `.github/workflows/rollback.yml`):** Publishes immutable `sha-` / SemVer tags to **Docker Hub**, authenticates to Azure via keyless **Microsoft Entra ID OIDC** (`azure/login@v2`), deploys safely via **Azure VM Run Command** (no inbound SSH from GitHub runners), verifies HTTPS SPA + backend connectivity, and supports one-click rollback.
