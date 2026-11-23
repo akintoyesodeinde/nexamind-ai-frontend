@@ -171,6 +171,18 @@ describe('Phase 3 Frontend — AI Chat SSE Streaming, Verified Citations & Histo
       updated_at: '2026-11-23T00:00:00.000Z',
     });
 
+    const completedCitation = {
+      index: 1,
+      document_id: 'doc-1',
+      document_name: 'Loan Policy.pdf',
+      page: 12,
+      section_heading: 'Credit Limits',
+      chunk_id: 'chunk-008',
+      excerpt: 'Commercial loans above $250,000 require Credit Committee approval.',
+      similarity_score: 0.94,
+      verified: true,
+    };
+
     vi.mocked(conversationService.get).mockResolvedValue({
       conversation: {
         id: 'conv-1',
@@ -183,7 +195,36 @@ describe('Phase 3 Frontend — AI Chat SSE Streaming, Verified Citations & Histo
         created_at: '2026-11-23T00:00:00.000Z',
         updated_at: '2026-11-23T00:00:00.000Z',
       },
-      messages: [],
+      messages: [
+        {
+          id: 'msg-u-1',
+          role: 'user',
+          content: 'Summarize loan policies',
+          model_alias: 'default-chat',
+          status: 'completed',
+          abstained: false,
+          usage: { input_tokens: 0, output_tokens: 0 },
+          cost_usd: '0.000000',
+          latency_ms: 0,
+          feedback: null,
+          citations: [],
+          created_at: '2026-11-23T00:00:00.000Z',
+        },
+        {
+          id: 'msg-a-1',
+          role: 'assistant',
+          content: 'Loans above $250,000 require Credit Committee approval [1].',
+          model_alias: 'default-chat',
+          status: 'completed',
+          abstained: false,
+          usage: { input_tokens: 420, output_tokens: 45 },
+          cost_usd: '0.000090',
+          latency_ms: 42,
+          feedback: null,
+          citations: [completedCitation],
+          created_at: '2026-11-23T00:00:01.000Z',
+        },
+      ],
     });
 
     vi.mocked(conversationService.streamMessage).mockImplementation(async (_id, _input, handlers) => {
@@ -194,19 +235,7 @@ describe('Phase 3 Frontend — AI Chat SSE Streaming, Verified Citations & Histo
         user_message_id: 'msg-u-1',
         message_id: 'msg-a-1',
         answer: 'Loans above $250,000 require Credit Committee approval [1].',
-        citations: [
-          {
-            index: 1,
-            document_id: 'doc-1',
-            document_name: 'Loan Policy.pdf',
-            page: 12,
-            section_heading: 'Credit Limits',
-            chunk_id: 'chunk-008',
-            excerpt: 'Commercial loans above $250,000 require Credit Committee approval.',
-            similarity_score: 0.94,
-            verified: true,
-          },
-        ],
+        citations: [completedCitation],
         usage: { input_tokens: 420, output_tokens: 45 },
         cost_usd: '0.000090',
         latency_ms: 42,
@@ -224,11 +253,11 @@ describe('Phase 3 Frontend — AI Chat SSE Streaming, Verified Citations & Histo
     await waitFor(
       () => {
         expect(screen.getByText(/verified source \[1\]/i)).toBeInTheDocument();
+        expect(screen.getAllByText(/Loan Policy\.pdf/i).length).toBeGreaterThanOrEqual(2);
+        expect(screen.getByText(/Page 12/i)).toBeInTheDocument();
       },
       { timeout: 10000 },
     );
-    expect(screen.getAllByText(/Loan Policy\.pdf/i).length).toBeGreaterThanOrEqual(2);
-    expect(screen.getByText(/Page 12/i)).toBeInTheDocument();
   });
 
   it('lists previous conversations on Conversation History screen', async () => {
