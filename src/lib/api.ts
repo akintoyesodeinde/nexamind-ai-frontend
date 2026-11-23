@@ -152,3 +152,55 @@ export async function apiRequest<T>(
 
   return payload as ApiEnvelope<T>;
 }
+
+export async function apiUploadRequest<T>(
+  path: string,
+  formData: FormData,
+): Promise<ApiEnvelope<T>> {
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  await ensureCsrfCookie();
+
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+    'X-Requested-With': 'XMLHttpRequest',
+  };
+
+  const xsrf = getCookie('XSRF-TOKEN');
+  if (xsrf) {
+    headers['X-XSRF-TOKEN'] = xsrf;
+  }
+
+  if (activeTenantId) {
+    headers['X-Tenant-ID'] = activeTenantId;
+  }
+
+  const response = await fetch(`${API_BASE}${normalizedPath}`, {
+    method: 'POST',
+    credentials: 'include',
+    headers,
+    body: formData,
+  });
+
+  let payload: unknown = null;
+  try {
+    payload = await response.json();
+  } catch {
+    payload = null;
+  }
+
+  if (!response.ok) {
+    const errPayload = payload as ApiErrorPayload | null;
+    if (response.status === 419) {
+      resetCsrfState();
+    }
+    throw new ApiError(
+      response.status,
+      errPayload?.error?.code ?? 'UPLOAD_ERROR',
+      errPayload?.error?.message ?? `Upload failed with status ${response.status}`,
+      errPayload?.error?.details,
+      errPayload?.meta?.request_id ?? response.headers.get('X-Request-ID') ?? undefined,
+    );
+  }
+
+  return payload as ApiEnvelope<T>;
+}

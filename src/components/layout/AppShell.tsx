@@ -47,9 +47,9 @@ const navGroups: { title: string; items: NavItem[] }[] = [
   {
     title: 'Knowledge',
     items: [
-      { label: 'Knowledge Bases', to: '/knowledge-bases', icon: Database, phaseBadge: 'P2' },
-      { label: 'Documents', to: '/documents', icon: FileText, phaseBadge: 'P2' },
-      { label: 'Doc Intelligence', to: '/documents/intelligence', icon: Sparkles, phaseBadge: 'P2' },
+      { label: 'Knowledge Bases', to: '/knowledge-bases', icon: Database },
+      { label: 'Documents', to: '/documents', icon: FileText },
+      { label: 'Doc Intelligence', to: '/documents/intelligence', icon: Sparkles },
     ],
   },
   {

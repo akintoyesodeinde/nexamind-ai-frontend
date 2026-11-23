@@ -10,6 +10,9 @@ import { OnboardingPage } from '@/features/auth/OnboardingPage';
 import { RegisterPage } from '@/features/auth/RegisterPage';
 import { PhasePlaceholderPage } from '@/features/common/PhasePlaceholderPage';
 import { DashboardPage } from '@/features/dashboard/DashboardPage';
+import { DocumentIntelligencePage } from '@/features/documents/DocumentIntelligencePage';
+import { DocumentsPage } from '@/features/documents/DocumentsPage';
+import { KnowledgeBasesPage } from '@/features/knowledge/KnowledgeBasesPage';
 import { ProfilePage } from '@/features/settings/ProfilePage';
 import { TenantSettingsPage } from '@/features/settings/TenantSettingsPage';
 import { UserRolesAdminPage } from '@/features/settings/UserRolesAdminPage';
@@ -79,36 +82,9 @@ export function AppRoutes() {
         <Route path="/settings/profile" element={<ProfilePage />} />
 
         {/* Phase 2 screens */}
-        <Route
-          path="/knowledge-bases"
-          element={
-            <PhasePlaceholderPage
-              title="Knowledge Base Management"
-              phase="Phase 2"
-              description="Create tenant-isolated knowledge bases and configure role/user ACL permissions."
-            />
-          }
-        />
-        <Route
-          path="/documents"
-          element={
-            <PhasePlaceholderPage
-              title="Document Upload & Ingestion"
-              phase="Phase 2"
-              description="Upload PDF/DOCX/TXT/CSV documents to Azure Blob Storage with async semantic chunking and vector embedding status."
-            />
-          }
-        />
-        <Route
-          path="/documents/intelligence"
-          element={
-            <PhasePlaceholderPage
-              title="Document Intelligence Workspace"
-              phase="Phase 2 & 3"
-              description="Summarize, classify, compare, and extract structured fields from authorized organizational documents."
-            />
-          }
-        />
+        <Route path="/knowledge-bases" element={<KnowledgeBasesPage />} />
+        <Route path="/documents" element={<DocumentsPage />} />
+        <Route path="/documents/intelligence" element={<DocumentIntelligencePage />} />
 
         {/* Phase 3 screens */}
         <Route

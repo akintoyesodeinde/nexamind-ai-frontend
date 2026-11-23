@@ -127,3 +127,90 @@ export interface AuditLogEntry {
   metadata: Record<string, unknown>;
   created_at: string;
 }
+
+export interface KnowledgeBase {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  visibility: 'tenant' | 'restricted';
+  status: 'active' | 'archived';
+  created_by: string;
+  documents_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AclGrant {
+  id?: string;
+  principal_type: 'user' | 'role';
+  principal_id: string;
+  permission_level: 'read' | 'write' | 'admin' | 'deny';
+  created_at?: string;
+}
+
+export interface DocumentRecord {
+  id: string;
+  knowledge_base_id: string;
+  uploaded_by: string;
+  filename: string;
+  mime_type: string;
+  file_size_bytes: number;
+  checksum_sha256: string;
+  current_version: number;
+  access_policy: 'inherit' | 'restricted';
+  status: 'pending' | 'processing' | 'ready' | 'failed' | 'deleted';
+  page_count: number | null;
+  chunk_count: number;
+  character_count: number;
+  error_message: string | null;
+  metadata: Record<string, unknown>;
+  processed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DocumentVersion {
+  id: string;
+  document_id: string;
+  version_number: number;
+  filename: string;
+  mime_type: string;
+  file_size_bytes: number;
+  checksum_sha256: string;
+  uploaded_by: string;
+  created_at: string;
+}
+
+export interface DocumentChunk {
+  id: string;
+  document_id: string;
+  document_version_id: string;
+  chunk_index: number;
+  page_number: number | null;
+  section_heading: string | null;
+  char_start: number;
+  char_end: number;
+  token_estimate: number;
+  content: string;
+  embedding_model: string | null;
+  created_at: string;
+}
+
+export interface RetrievalHit {
+  chunk_id: string;
+  document_id: string;
+  knowledge_base_id: string;
+  filename: string;
+  page_number: number | null;
+  section_heading: string | null;
+  content: string;
+  score: number;
+}
+
+export interface RetrievalSearchResponse {
+  adapter: string;
+  query: string;
+  authorized_document_count: number;
+  results: RetrievalHit[];
+}
