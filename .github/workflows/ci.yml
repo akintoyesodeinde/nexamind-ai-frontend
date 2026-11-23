@@ -1,0 +1,86 @@
+name: Frontend CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: frontend-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-test-and-build:
+    name: Lint, TypeScript Strict Check, Vitest & Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies using lockfile
+        run: npm ci
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Run strict TypeScript validation
+        run: npm run typecheck
+
+      - name: Run Vitest unit and component tests
+        run: npm test
+
+      - name: Build production Vite bundle
+        run: npm run build
+
+  docker-build-and-scan:
+    name: Build, Smoke-Test & Scan Production Docker Image
+    needs: quality-test-and-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build production Nginx SPA image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          target: production
+          load: true
+          tags: nexamind-ai-frontend:ci-${{ github.sha }}
+
+      - name: Smoke-test production SPA container
+        run: |
+          docker run -d --name nexamind-fe-smoke -p 8080:8080 nexamind-ai-frontend:ci-${{ github.sha }}
+          sleep 2
+          curl -fsS http://127.0.0.1:8080/healthz
+          curl -fsS http://127.0.0.1:8080/ | grep -q "NexaMind AI"
+          docker rm -f nexamind-fe-smoke
+
+      - name: Scan container image with Trivy (fail on fixable CRITICAL)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: nexamind-ai-frontend:ci-${{ github.sha }}
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: CRITICAL

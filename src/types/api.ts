@@ -214,3 +214,94 @@ export interface RetrievalSearchResponse {
   authorized_document_count: number;
   results: RetrievalHit[];
 }
+
+export interface AiModel {
+  id: string;
+  alias: string;
+  provider_model_name: string;
+  provider_key: string;
+  capability: 'chat' | 'embedding';
+  max_context_tokens: number;
+  input_cost_per_1k_usd: string;
+  output_cost_per_1k_usd: string;
+  is_active: boolean;
+}
+
+export interface ConversationSummary {
+  id: string;
+  title: string;
+  default_model_alias: string;
+  knowledge_base_ids: string[];
+  status: 'active' | 'archived';
+  messages_count: number;
+  last_message_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MessageCitation {
+  index: number;
+  document_id: string;
+  document_name: string;
+  page: number | null;
+  section_heading: string | null;
+  chunk_id: string;
+  excerpt: string;
+  similarity_score: number;
+  verified: boolean;
+}
+
+export interface ChatMessage {
+  id: string;
+  conversation_id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  model_alias: string | null;
+  status: 'streaming' | 'completed' | 'abstained' | 'failed';
+  abstained: boolean;
+  citations: MessageCitation[];
+  usage: {
+    input_tokens: number;
+    output_tokens: number;
+  };
+  cost_usd: string;
+  latency_ms: number;
+  feedback: 'positive' | 'negative' | null;
+  feedback_note: string | null;
+  created_at: string;
+}
+
+export interface AskResponse {
+  conversation_id: string;
+  user_message_id: string;
+  message_id: string;
+  answer: string;
+  citations: MessageCitation[];
+  usage: {
+    input_tokens: number;
+    output_tokens: number;
+  };
+  cost_usd: string;
+  latency_ms: number;
+  abstained: boolean;
+  status: 'completed' | 'abstained' | 'failed';
+}
+
+export interface DocumentAnalysisResponse {
+  document_id: string;
+  filename: string;
+  action: 'summarize' | 'classify' | 'extract_structured';
+  result: Record<string, unknown>;
+  usage: { input_tokens: number; output_tokens: number };
+  cost_usd: string;
+  latency_ms: number;
+}
+
+export interface DocumentCompareResponse {
+  document_a: { id: string; filename: string };
+  document_b: { id: string; filename: string };
+  comparison: Record<string, unknown>;
+  usage: { input_tokens: number; output_tokens: number };
+  cost_usd: string;
+  latency_ms: number;
+}

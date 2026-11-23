@@ -40,8 +40,8 @@ const navGroups: { title: string; items: NavItem[] }[] = [
     title: 'Workspace',
     items: [
       { label: 'Dashboard', to: '/dashboard', icon: LayoutDashboard },
-      { label: 'AI Chat', to: '/chat', icon: MessageSquare, phaseBadge: 'P3' },
-      { label: 'Conversations', to: '/conversations', icon: History, phaseBadge: 'P3' },
+      { label: 'AI Chat', to: '/chat', icon: MessageSquare },
+      { label: 'Conversations', to: '/conversations', icon: History },
     ],
   },
   {

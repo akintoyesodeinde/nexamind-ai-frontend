@@ -9,6 +9,8 @@ import { LoginPage } from '@/features/auth/LoginPage';
 import { OnboardingPage } from '@/features/auth/OnboardingPage';
 import { RegisterPage } from '@/features/auth/RegisterPage';
 import { PhasePlaceholderPage } from '@/features/common/PhasePlaceholderPage';
+import { ChatWorkspacePage } from '@/features/chat/ChatWorkspacePage';
+import { ConversationsPage } from '@/features/chat/ConversationsPage';
 import { DashboardPage } from '@/features/dashboard/DashboardPage';
 import { DocumentIntelligencePage } from '@/features/documents/DocumentIntelligencePage';
 import { DocumentsPage } from '@/features/documents/DocumentsPage';
@@ -87,26 +89,9 @@ export function AppRoutes() {
         <Route path="/documents/intelligence" element={<DocumentIntelligencePage />} />
 
         {/* Phase 3 screens */}
-        <Route
-          path="/chat"
-          element={
-            <PhasePlaceholderPage
-              title="AI Chat Workspace"
-              phase="Phase 3"
-              description="Grounded RAG question answering with live SSE streaming and verifiable document citations."
-            />
-          }
-        />
-        <Route
-          path="/conversations"
-          element={
-            <PhasePlaceholderPage
-              title="Conversation History"
-              phase="Phase 3"
-              description="Browse and resume tenant-scoped AI conversations."
-            />
-          }
-        />
+        <Route path="/chat" element={<ChatWorkspacePage />} />
+        <Route path="/chat/:conversationId" element={<ChatWorkspacePage />} />
+        <Route path="/conversations" element={<ConversationsPage />} />
 
         {/* Phase 4 screens */}
         <Route

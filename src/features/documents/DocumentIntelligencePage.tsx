@@ -1,11 +1,16 @@
 import * as React from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
-import { FileText, Search, Sparkles } from 'lucide-react';
+import { FileText, GitCompare, Search, Sparkles } from 'lucide-react';
 import { useAuth } from '@/app/AuthContext';
 import { ApiError } from '@/lib/api';
+import { documentIntelligenceService } from '@/services/chat';
 import { documentService, retrievalService } from '@/services/knowledge';
-import type { RetrievalSearchResponse } from '@/types/api';
+import type {
+  DocumentAnalysisResponse,
+  DocumentCompareResponse,
+  RetrievalSearchResponse,
+} from '@/types/api';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -21,6 +26,11 @@ export function DocumentIntelligencePage() {
   const [queryText, setQueryText] = React.useState('');
   const [searchResult, setSearchResult] = React.useState<RetrievalSearchResponse | null>(null);
   const [searchError, setSearchError] = React.useState<string | null>(null);
+
+  const [analysisResult, setAnalysisResult] = React.useState<DocumentAnalysisResponse | null>(null);
+  const [compareTargetId, setCompareTargetId] = React.useState<string>('');
+  const [compareResult, setCompareResult] = React.useState<DocumentCompareResponse | null>(null);
+  const [aiError, setAiError] = React.useState<string | null>(null);
 
   const docsQuery = useQuery({
     queryKey: ['documents', activeTenantId, 'ready'],
@@ -41,11 +51,7 @@ export function DocumentIntelligencePage() {
   });
 
   const searchMutation = useMutation({
-    mutationFn: () =>
-      retrievalService.search({
-        query: queryText.trim(),
-        top_k: 6,
-      }),
+    mutationFn: () => retrievalService.search({ query: queryText.trim(), top_k: 6 }),
     onSuccess: (data) => {
       setSearchError(null);
       setSearchResult(data);
@@ -55,14 +61,42 @@ export function DocumentIntelligencePage() {
     },
   });
 
+  const analyzeMutation = useMutation({
+    mutationFn: (action: 'summarize' | 'classify' | 'extract_structured') =>
+      documentIntelligenceService.analyze(selectedDocId, { action }),
+    onSuccess: (data) => {
+      setAiError(null);
+      setAnalysisResult(data);
+    },
+    onError: (err) => {
+      setAiError(err instanceof ApiError ? err.message : 'Document analysis failed.');
+    },
+  });
+
+  const compareMutation = useMutation({
+    mutationFn: () =>
+      documentIntelligenceService.compare({
+        document_a_id: selectedDocId,
+        document_b_id: compareTargetId,
+      }),
+    onSuccess: (data) => {
+      setAiError(null);
+      setCompareResult(data);
+    },
+    onError: (err) => {
+      setAiError(err instanceof ApiError ? err.message : 'Document comparison failed.');
+    },
+  });
+
   const selectedDoc = (docsQuery.data ?? []).find((d) => d.id === selectedDocId) ?? null;
+  const comparableDocs = (docsQuery.data ?? []).filter((d) => d.id !== selectedDocId);
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Document Intelligence Workspace</h1>
         <p className="text-sm text-muted-foreground">
-          Inspect extracted semantic chunks, verify page references, and run pre-retrieval ACL-enforced SQL Server vector search.
+          Summarize, classify, extract structured fields, compare policies, inspect chunks, and test ACL-enforced vector search.
         </p>
       </div>
 
@@ -110,9 +144,7 @@ export function DocumentIntelligencePage() {
               </div>
 
               {searchResult.results.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  No authorized chunks matched this query.
-                </p>
+                <p className="text-sm text-muted-foreground">No authorized chunks matched this query.</p>
               ) : (
                 <div className="space-y-2">
                   {searchResult.results.map((hit) => (
@@ -123,13 +155,9 @@ export function DocumentIntelligencePage() {
                           {hit.page_number ? ` · Page ${hit.page_number}` : ''}
                           {hit.section_heading ? ` · ${hit.section_heading}` : ''}
                         </span>
-                        <Badge variant="success">
-                          Cosine {(hit.score * 100).toFixed(1)}%
-                        </Badge>
+                        <Badge variant="success">Cosine {(hit.score * 100).toFixed(1)}%</Badge>
                       </div>
-                      <p className="whitespace-pre-wrap text-xs text-muted-foreground">
-                        {hit.content}
-                      </p>
+                      <p className="whitespace-pre-wrap text-xs text-muted-foreground">{hit.content}</p>
                     </div>
                   ))}
                 </div>
@@ -139,12 +167,12 @@ export function DocumentIntelligencePage() {
         </CardContent>
       </Card>
 
-      {/* Document Chunk Inspector */}
+      {/* Document Selector + AI Intelligence + Chunks */}
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="h-fit">
           <CardHeader>
             <CardTitle className="text-base">Indexed Documents</CardTitle>
-            <CardDescription>Select a ready document to inspect its chunks.</CardDescription>
+            <CardDescription>Select a ready document to analyze or inspect.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
             {docsQuery.isLoading ? (
@@ -162,7 +190,11 @@ export function DocumentIntelligencePage() {
                   <button
                     key={doc.id}
                     type="button"
-                    onClick={() => setSearchParams({ doc: doc.id })}
+                    onClick={() => {
+                      setAnalysisResult(null);
+                      setCompareResult(null);
+                      setSearchParams({ doc: doc.id });
+                    }}
                     className={`flex w-full items-center justify-between rounded-md border px-3 py-2 text-left text-xs transition-colors ${
                       doc.id === selectedDocId
                         ? 'border-primary bg-primary/5 font-semibold text-primary'
@@ -181,11 +213,116 @@ export function DocumentIntelligencePage() {
           </CardContent>
         </Card>
 
-        <Card className="lg:col-span-2">
-          <CardHeader className="flex flex-row items-center justify-between gap-2">
-            <div>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Sparkles className="h-4 w-4 text-primary" />
+        <div className="space-y-6 lg:col-span-2">
+          {/* Live AI Analysis & Comparison Controls */}
+          {selectedDoc && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Sparkles className="h-4 w-4 text-primary" />
+                  AI Document Intelligence — {selectedDoc.filename}
+                </CardTitle>
+                <CardDescription>
+                  Grounded analysis metered against tenant monthly token and USD budgets.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {aiError && <Alert variant="error">{aiError}</Alert>}
+
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={analyzeMutation.isPending}
+                    onClick={() => analyzeMutation.mutate('summarize')}
+                  >
+                    Summarize
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={analyzeMutation.isPending}
+                    onClick={() => analyzeMutation.mutate('classify')}
+                  >
+                    Classify
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={analyzeMutation.isPending}
+                    onClick={() => analyzeMutation.mutate('extract_structured')}
+                  >
+                    Extract Structured Fields
+                  </Button>
+                </div>
+
+                {comparableDocs.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2 border-t pt-3">
+                    <GitCompare className="h-4 w-4 text-muted-foreground" />
+                    <select
+                      aria-label="Compare against document"
+                      value={compareTargetId}
+                      onChange={(e) => setCompareTargetId(e.target.value)}
+                      className="h-9 rounded-md border border-input bg-card px-2.5 text-xs"
+                    >
+                      <option value="">Select second document to compare...</option>
+                      {comparableDocs.map((d) => (
+                        <option key={d.id} value={d.id}>
+                          {d.filename}
+                        </option>
+                      ))}
+                    </select>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      disabled={!compareTargetId || compareMutation.isPending}
+                      onClick={() => compareMutation.mutate()}
+                    >
+                      {compareMutation.isPending ? 'Comparing...' : 'Compare Policies'}
+                    </Button>
+                  </div>
+                )}
+
+                {analysisResult && (
+                  <div className="rounded-md border bg-muted/30 p-3.5 text-xs">
+                    <div className="mb-2 flex items-center justify-between">
+                      <Badge variant="success" className="capitalize">
+                        {analysisResult.action.replace('_', ' ')}
+                      </Badge>
+                      <span className="text-muted-foreground">
+                        {analysisResult.usage.input_tokens + analysisResult.usage.output_tokens} tok · ${analysisResult.cost_usd}
+                      </span>
+                    </div>
+                    <pre className="overflow-x-auto whitespace-pre-wrap font-mono text-[11px]">
+                      {JSON.stringify(analysisResult.result, null, 2)}
+                    </pre>
+                  </div>
+                )}
+
+                {compareResult && (
+                  <div className="rounded-md border bg-muted/30 p-3.5 text-xs">
+                    <div className="mb-2 flex items-center justify-between">
+                      <Badge variant="secondary">
+                        Comparison: {compareResult.document_a.filename} vs {compareResult.document_b.filename}
+                      </Badge>
+                      <span className="text-muted-foreground">${compareResult.cost_usd}</span>
+                    </div>
+                    <pre className="overflow-x-auto whitespace-pre-wrap font-mono text-[11px]">
+                      {JSON.stringify(compareResult.comparison, null, 2)}
+                    </pre>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Chunk Inspector */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">
                 {selectedDoc ? `Semantic Chunks — ${selectedDoc.filename}` : 'Chunk Inspector'}
               </CardTitle>
               <CardDescription>
@@ -193,44 +330,43 @@ export function DocumentIntelligencePage() {
                   ? `${selectedDoc.chunk_count} chunks · ${selectedDoc.character_count.toLocaleString()} chars · v${selectedDoc.current_version}`
                   : 'Select an indexed document on the left.'}
               </CardDescription>
-            </div>
-            <Badge variant="outline">AI Summarize / Extract (Phase 3)</Badge>
-          </CardHeader>
-          <CardContent>
-            {!selectedDocId ? (
-              <EmptyState
-                title="No document selected"
-                description="Choose an indexed document to inspect semantic chunks and page offsets."
-              />
-            ) : chunksQuery.isLoading ? (
-              <Skeleton className="h-48 w-full" />
-            ) : (chunksQuery.data ?? []).length === 0 ? (
-              <p className="text-sm text-muted-foreground">No chunks recorded for this document.</p>
-            ) : (
-              <div className="space-y-3">
-                {(chunksQuery.data ?? []).map((chunk) => (
-                  <div key={chunk.id} className="rounded-md border p-3.5 text-sm">
-                    <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-                      <span className="font-semibold text-foreground">
-                        Chunk #{chunk.chunk_index + 1}
-                        {chunk.section_heading ? ` — ${chunk.section_heading}` : ''}
-                      </span>
-                      <div className="flex items-center gap-2">
-                        {chunk.page_number !== null && (
-                          <Badge variant="outline">Page {chunk.page_number}</Badge>
-                        )}
-                        <Badge variant="secondary">~{chunk.token_estimate} tokens</Badge>
+            </CardHeader>
+            <CardContent>
+              {!selectedDocId ? (
+                <EmptyState
+                  title="No document selected"
+                  description="Choose an indexed document to inspect semantic chunks and page offsets."
+                />
+              ) : chunksQuery.isLoading ? (
+                <Skeleton className="h-48 w-full" />
+              ) : (chunksQuery.data ?? []).length === 0 ? (
+                <p className="text-sm text-muted-foreground">No chunks recorded for this document.</p>
+              ) : (
+                <div className="space-y-3">
+                  {(chunksQuery.data ?? []).map((chunk) => (
+                    <div key={chunk.id} className="rounded-md border p-3.5 text-sm">
+                      <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                        <span className="font-semibold text-foreground">
+                          Chunk #{chunk.chunk_index + 1}
+                          {chunk.section_heading ? ` — ${chunk.section_heading}` : ''}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          {chunk.page_number !== null && (
+                            <Badge variant="outline">Page {chunk.page_number}</Badge>
+                          )}
+                          <Badge variant="secondary">~{chunk.token_estimate} tokens</Badge>
+                        </div>
                       </div>
+                      <p className="whitespace-pre-wrap text-xs leading-relaxed text-foreground/90">
+                        {chunk.content}
+                      </p>
                     </div>
-                    <p className="whitespace-pre-wrap text-xs leading-relaxed text-foreground/90">
-                      {chunk.content}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );
